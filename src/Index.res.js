@@ -3,7 +3,6 @@
 
 var Fs = require("fs");
 var Caml_option = require("rescript/lib/js/caml_option.js");
-var Core__Array = require("@rescript/core/src/Core__Array.res.js");
 var TreeSitter = require("tree-sitter");
 var Core__Option = require("@rescript/core/src/Core__Option.res.js");
 var TreeSitterPython = require("tree-sitter-python");
@@ -76,24 +75,6 @@ function buildParser(language) {
 
 function buildQuery(language, scm) {
   return new TreeSitter.Query(language, scm);
-}
-
-function getTags(captures) {
-  return Core__Array.filterMap(captures, (function (capture) {
-                var node = capture.node;
-                var name = capture.name;
-                var kind = name.startsWith("name.definition.") ? "def" : (
-                    name.startsWith("name.reference.") ? "ref" : undefined
-                  );
-                return Core__Option.map(kind, (function (k) {
-                              return {
-                                      name: node.text,
-                                      kind: k,
-                                      line: node.startPosition.row,
-                                      col: node.startPosition.column
-                                    };
-                            }));
-              }));
 }
 
 function mergeChunks(chunks) {
@@ -184,7 +165,6 @@ exports.getScmQuery = getScmQuery;
 exports.orElse = orElse;
 exports.buildParser = buildParser;
 exports.buildQuery = buildQuery;
-exports.getTags = getTags;
 exports.mergeChunks = mergeChunks;
 exports.getOutline = getOutline;
 exports.outline = outline;

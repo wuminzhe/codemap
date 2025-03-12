@@ -35,13 +35,6 @@ let getScmQuery: string => string = languageName => {
   readFileSync(scmFilename, "utf-8")
 }
 
-type tag = {
-  name: string,
-  kind: string,
-  line: int,
-  col: int,
-}
-
 let orElse: (option<'a>, unit => option<'b>) => option<'b> = (o, f) => {
   switch o {
   | Some(x) => Some(x)
@@ -57,65 +50,6 @@ let buildParser: 'language => 'parser = language => {
 
 let buildQuery: ('language, string) => 'query = (language, scm) => {
   createQuery(language, scm)
-}
-
-// let getTags: string => option<array<tag>> = languageName => {
-//   let language = getLanguage(languageName)
-//   let scm = getScmQuery(languageName)
-//
-//   let parser = createParser()
-//   parser->setLanguage(language)
-//   let query =
-//     createQuery(language, scm)
-//     ->Option.map(((parser, query)) => {
-//       let source = readFileSync(filename, "utf-8")
-//       let tree = parser->parse(source)
-//       captures(query, tree.rootNode)
-//     })
-//     ->Option.map(captures => {
-//       captures->Array.filterMap(capture => {
-//         let {name, node} = capture
-//         let kind = if String.startsWith(name, "name.definition.") {
-//           Some("def")
-//         } else if String.startsWith(name, "name.reference.") {
-//           Some("ref")
-//         } else {
-//           None
-//         }
-//         kind->Option.map(
-//           kind => {
-//             {
-//               filename,
-//               name: node.text,
-//               kind,
-//               line: node.startPosition.row,
-//               col: node.startPosition.column,
-//             }
-//           },
-//         )
-//       })
-//     })
-// }
-
-let getTags: array<'capture> => array<tag> = captures => {
-  captures->Array.filterMap(capture => {
-    let {name, node} = capture
-    let kind = if String.startsWith(name, "name.definition.") {
-      Some("def")
-    } else if String.startsWith(name, "name.reference.") {
-      Some("ref")
-    } else {
-      None
-    }
-    kind->Option.map(k => {
-      {
-        name: node.text,
-        kind: k,
-        line: node.startPosition.row,
-        col: node.startPosition.column,
-      }
-    })
-  })
 }
 
 type chunk = {
