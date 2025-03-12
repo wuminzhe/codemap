@@ -36,7 +36,6 @@ let getScmQuery: string => string = languageName => {
 }
 
 type tag = {
-  filename: string,
   name: string,
   kind: string,
   line: int,
@@ -50,7 +49,107 @@ let orElse: (option<'a>, unit => option<'b>) => option<'b> = (o, f) => {
   }
 }
 
-let getTags: string => option<array<tag>> = filename => {
+let buildParser: 'language => 'parser = language => {
+  let parser = createParser()
+  parser->setLanguage(language)
+  parser
+}
+
+let buildQuery: ('language, string) => 'query = (language, scm) => {
+  createQuery(language, scm)
+}
+
+// let getTags: string => option<array<tag>> = languageName => {
+//   let language = getLanguage(languageName)
+//   let scm = getScmQuery(languageName)
+//
+//   let parser = createParser()
+//   parser->setLanguage(language)
+//   let query =
+//     createQuery(language, scm)
+//     ->Option.map(((parser, query)) => {
+//       let source = readFileSync(filename, "utf-8")
+//       let tree = parser->parse(source)
+//       captures(query, tree.rootNode)
+//     })
+//     ->Option.map(captures => {
+//       captures->Array.filterMap(capture => {
+//         let {name, node} = capture
+//         let kind = if String.startsWith(name, "name.definition.") {
+//           Some("def")
+//         } else if String.startsWith(name, "name.reference.") {
+//           Some("ref")
+//         } else {
+//           None
+//         }
+//         kind->Option.map(
+//           kind => {
+//             {
+//               filename,
+//               name: node.text,
+//               kind,
+//               line: node.startPosition.row,
+//               col: node.startPosition.column,
+//             }
+//           },
+//         )
+//       })
+//     })
+// }
+
+let getTags: array<'capture> => array<tag> = captures => {
+  captures->Array.filterMap(capture => {
+    let {name, node} = capture
+    let kind = if String.startsWith(name, "name.definition.") {
+      Some("def")
+    } else if String.startsWith(name, "name.reference.") {
+      Some("ref")
+    } else {
+      None
+    }
+    kind->Option.map(k => {
+      {
+        name: node.text,
+        kind: k,
+        line: node.startPosition.row,
+        col: node.startPosition.column,
+      }
+    })
+  })
+}
+
+type chunk = {
+  content: string,
+  startRow: int,
+  endRow: int,
+}
+
+let mergeChunks: array<chunk> => array<chunk> = chunks => {
+  let result = [chunks->Array.getUnsafe(0)]
+
+  for i in 1 to Array.length(chunks) - 1 {
+    let prevIndex = Array.length(result) - 1
+    let curr = chunks->Array.getUnsafe(i)
+    let prev = result->Array.getUnsafe(prevIndex)
+
+    if prev.endRow + 1 == curr.startRow {
+      result->Array.setUnsafe(
+        prevIndex,
+        {
+          content: prev.content ++ "\n" ++ curr.content,
+          startRow: prev.startRow,
+          endRow: curr.endRow,
+        },
+      )
+    } else {
+      Array.push(result, curr)
+    }
+  }
+
+  result
+}
+
+let getOutline: string => option<string> = filename => {
   getLanguageName(filename)
   ->orElse(() => {
     Console.log("Unsupported file extension")
@@ -58,44 +157,56 @@ let getTags: string => option<array<tag>> = filename => {
   })
   ->Option.map(languageName => {
     let language = getLanguage(languageName)
-    let scmQuery = getScmQuery(languageName)
-    (language, scmQuery)
+    let scm = getScmQuery(languageName)
+    (language, scm)
   })
-  ->Option.map(((language, scmQuery)) => {
-    let parser = createParser()
-    parser->setLanguage(language)
-    let query = createQuery(language, scmQuery)
+  ->Option.map(((language, scm)) => {
+    let parser = buildParser(language)
+    let query = buildQuery(language, scm)
     (parser, query)
   })
   ->Option.map(((parser, query)) => {
     let source = readFileSync(filename, "utf-8")
     let tree = parser->parse(source)
-    captures(query, tree.rootNode)
+    (source, tree, query)
   })
-  ->Option.map(captures => {
-    captures->Array.filterMap(capture => {
-      let {name, node} = capture
-      let kind = if String.startsWith(name, "name.definition.") {
-        Some("def")
-      } else if String.startsWith(name, "name.reference.") {
-        Some("ref")
-      } else {
-        None
+  ->Option.map(((source, tree, query)) => {
+    let captures =
+      captures(query, tree.rootNode)
+      ->Array.toSorted((a, b) => {
+        float(a.node.startPosition.row - b.node.startPosition.row)
+      })
+      ->Array.filter(capture => {
+        let {name} = capture
+        String.startsWith(name, "name.definition.") || String.startsWith(name, "name.reference.")
+      })
+    (source, captures)
+  })
+  ->Option.map(((source, captures)) => {
+    let lines = String.split(source, "\n")
+    captures->Array.map(capture => {
+      let content =
+        lines
+        ->Array.slice(~start=capture.node.startPosition.row, ~end=capture.node.endPosition.row + 1)
+        ->Array.join("\n")
+      {
+        content,
+        startRow: capture.node.startPosition.row,
+        endRow: capture.node.endPosition.row,
       }
-      kind->Option.map(
-        kind => {
-          {
-            filename,
-            name: node.text,
-            kind,
-            line: node.startPosition.row,
-            col: node.startPosition.column,
-          }
-        },
-      )
     })
+  })
+  ->Option.map(chunks => {
+    let merged = mergeChunks(chunks)
+    merged
+    ->Array.map(chunk => {
+      chunk.content
+    })
+    ->Array.join("\n…\n")
   })
 }
 
-let tags = getTags("test.py")
-Console.log(tags)
+let outline = getOutline("test.py")
+Console.log(outline)
+
+// monad bera sui chains

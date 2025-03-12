@@ -68,57 +68,124 @@ function orElse(o, f) {
   }
 }
 
-function getTags(filename) {
-  return Core__Option.map(Core__Option.map(Core__Option.map(Core__Option.map(orElse(getLanguageName(filename), (function () {
-                                console.log("Unsupported file extension");
-                              })), (function (languageName) {
-                            var language = getLanguage(languageName);
-                            var scmQuery = getScmQuery(languageName);
-                            return [
-                                    language,
-                                    scmQuery
-                                  ];
-                          })), (function (param) {
-                        var language = param[0];
-                        var parser = new TreeSitter();
-                        parser.setLanguage(language);
-                        var query = new TreeSitter.Query(language, param[1]);
-                        return [
-                                parser,
-                                query
-                              ];
-                      })), (function (param) {
-                    var source = Fs.readFileSync(filename, "utf-8");
-                    var tree = param[0].parse(source);
-                    return param[1].captures(tree.rootNode);
-                  })), (function (captures) {
-                return Core__Array.filterMap(captures, (function (capture) {
-                              var node = capture.node;
-                              var name = capture.name;
-                              var kind = name.startsWith("name.definition.") ? "def" : (
-                                  name.startsWith("name.reference.") ? "ref" : undefined
-                                );
-                              return Core__Option.map(kind, (function (kind) {
-                                            return {
-                                                    filename: filename,
-                                                    name: node.text,
-                                                    kind: kind,
-                                                    line: node.startPosition.row,
-                                                    col: node.startPosition.column
-                                                  };
-                                          }));
+function buildParser(language) {
+  var parser = new TreeSitter();
+  parser.setLanguage(language);
+  return parser;
+}
+
+function buildQuery(language, scm) {
+  return new TreeSitter.Query(language, scm);
+}
+
+function getTags(captures) {
+  return Core__Array.filterMap(captures, (function (capture) {
+                var node = capture.node;
+                var name = capture.name;
+                var kind = name.startsWith("name.definition.") ? "def" : (
+                    name.startsWith("name.reference.") ? "ref" : undefined
+                  );
+                return Core__Option.map(kind, (function (k) {
+                              return {
+                                      name: node.text,
+                                      kind: k,
+                                      line: node.startPosition.row,
+                                      col: node.startPosition.column
+                                    };
                             }));
               }));
 }
 
-var tags = getTags("test.py");
+function mergeChunks(chunks) {
+  var result = [chunks[0]];
+  for(var i = 1 ,i_finish = chunks.length; i < i_finish; ++i){
+    var prevIndex = result.length - 1 | 0;
+    var curr = chunks[i];
+    var prev = result[prevIndex];
+    if ((prev.endRow + 1 | 0) === curr.startRow) {
+      result[prevIndex] = {
+        content: prev.content + "\n" + curr.content,
+        startRow: prev.startRow,
+        endRow: curr.endRow
+      };
+    } else {
+      result.push(curr);
+    }
+  }
+  return result;
+}
 
-console.log(tags);
+function getOutline(filename) {
+  return Core__Option.map(Core__Option.map(Core__Option.map(Core__Option.map(Core__Option.map(Core__Option.map(orElse(getLanguageName(filename), (function () {
+                                        console.log("Unsupported file extension");
+                                      })), (function (languageName) {
+                                    var language = getLanguage(languageName);
+                                    var scm = getScmQuery(languageName);
+                                    return [
+                                            language,
+                                            scm
+                                          ];
+                                  })), (function (param) {
+                                var language = param[0];
+                                var parser = buildParser(language);
+                                var query = new TreeSitter.Query(language, param[1]);
+                                return [
+                                        parser,
+                                        query
+                                      ];
+                              })), (function (param) {
+                            var source = Fs.readFileSync(filename, "utf-8");
+                            var tree = param[0].parse(source);
+                            return [
+                                    source,
+                                    tree,
+                                    param[1]
+                                  ];
+                          })), (function (param) {
+                        var captures = param[2].captures(param[1].rootNode).toSorted(function (a, b) {
+                                return a.node.startPosition.row - b.node.startPosition.row | 0;
+                              }).filter(function (capture) {
+                              var name = capture.name;
+                              if (name.startsWith("name.definition.")) {
+                                return true;
+                              } else {
+                                return name.startsWith("name.reference.");
+                              }
+                            });
+                        return [
+                                param[0],
+                                captures
+                              ];
+                      })), (function (param) {
+                    var lines = param[0].split("\n");
+                    return param[1].map(function (capture) {
+                                var content = lines.slice(capture.node.startPosition.row, capture.node.endPosition.row + 1 | 0).join("\n");
+                                return {
+                                        content: content,
+                                        startRow: capture.node.startPosition.row,
+                                        endRow: capture.node.endPosition.row
+                                      };
+                              });
+                  })), (function (chunks) {
+                var merged = mergeChunks(chunks);
+                return merged.map(function (chunk) {
+                              return chunk.content;
+                            }).join("\n…\n");
+              }));
+}
+
+var outline = getOutline("test.py");
+
+console.log(outline);
 
 exports.getLanguageName = getLanguageName;
 exports.getLanguage = getLanguage;
 exports.getScmQuery = getScmQuery;
 exports.orElse = orElse;
+exports.buildParser = buildParser;
+exports.buildQuery = buildQuery;
 exports.getTags = getTags;
-exports.tags = tags;
-/* tags Not a pure module */
+exports.mergeChunks = mergeChunks;
+exports.getOutline = getOutline;
+exports.outline = outline;
+/* outline Not a pure module */
