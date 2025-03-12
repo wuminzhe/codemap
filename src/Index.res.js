@@ -29,42 +29,55 @@ function getLanguageName(filename) {
 function getLanguage(languageName) {
   switch (languageName) {
     case "javascript" :
-        return Caml_option.some(TreeSitterJavascript);
+        return TreeSitterJavascript;
     case "python" :
-        return Caml_option.some(TreeSitterPython);
+        return TreeSitterPython;
     default:
-      return ;
+      throw {
+            RE_EXN_ID: "Failure",
+            _1: "Unsupported language",
+            Error: new Error()
+          };
   }
 }
 
 function getScmQuery(languageName) {
-  var tmp;
+  var scmFilename;
   switch (languageName) {
     case "javascript" :
-        tmp = "javascript.scm";
+        scmFilename = "javascript.scm";
         break;
     case "python" :
-        tmp = "python.scm";
+        scmFilename = "python.scm";
         break;
     default:
-      tmp = undefined;
+      throw {
+            RE_EXN_ID: "Failure",
+            _1: "Unsupported scm query for language " + languageName,
+            Error: new Error()
+          };
   }
-  return Core__Option.map(tmp, (function (filename) {
-                return Fs.readFileSync(filename, "utf-8");
-              }));
+  return Fs.readFileSync(scmFilename, "utf-8");
+}
+
+function orElse(o, f) {
+  if (o !== undefined) {
+    return Caml_option.some(Caml_option.valFromOption(o));
+  } else {
+    return f();
+  }
 }
 
 function getTags(filename) {
-  return Core__Option.map(Core__Option.map(Core__Option.map(Core__Option.flatMap(getLanguageName(filename), (function (languageName) {
+  return Core__Option.map(Core__Option.map(Core__Option.map(Core__Option.map(orElse(getLanguageName(filename), (function () {
+                                console.log("Unsupported file extension");
+                              })), (function (languageName) {
                             var language = getLanguage(languageName);
                             var scmQuery = getScmQuery(languageName);
-                            if (language !== undefined && scmQuery !== undefined) {
-                              return [
-                                      Caml_option.valFromOption(language),
-                                      scmQuery
-                                    ];
-                            }
-                            
+                            return [
+                                    language,
+                                    scmQuery
+                                  ];
                           })), (function (param) {
                         var language = param[0];
                         var parser = new TreeSitter();
@@ -105,6 +118,7 @@ console.log(tags);
 exports.getLanguageName = getLanguageName;
 exports.getLanguage = getLanguage;
 exports.getScmQuery = getScmQuery;
+exports.orElse = orElse;
 exports.getTags = getTags;
 exports.tags = tags;
 /* tags Not a pure module */

@@ -17,22 +17,22 @@ let getLanguageName: string => option<string> = filename => {
   })
 }
 
-let getLanguage: string => option<'language> = languageName => {
+let getLanguage: string => 'language = languageName => {
   switch languageName {
-  | "javascript" => Some(javascript)
-  | "python" => Some(python)
-  | _ => None
+  | "javascript" => javascript
+  | "python" => python
+  | _ => raise(Failure("Unsupported language"))
   }
 }
 
-let getScmQuery: string => option<string> = languageName => {
-  switch languageName {
-  | "javascript" => Some("javascript.scm")
-  | "python" => Some("python.scm")
-  | _ => None
-  }->Option.map(filename => {
-    readFileSync(filename, "utf-8")
-  })
+let getScmQuery: string => string = languageName => {
+  let scmFilename = switch languageName {
+  | "javascript" => "javascript.scm"
+  | "python" => "python.scm"
+  | _ => raise(Failure(`Unsupported scm query for language ${languageName}`))
+  }
+
+  readFileSync(scmFilename, "utf-8")
 }
 
 type tag = {
@@ -43,15 +43,23 @@ type tag = {
   col: int,
 }
 
+let orElse: (option<'a>, unit => option<'b>) => option<'b> = (o, f) => {
+  switch o {
+  | Some(x) => Some(x)
+  | None => f()
+  }
+}
+
 let getTags: string => option<array<tag>> = filename => {
   getLanguageName(filename)
-  ->Option.flatMap(languageName => {
+  ->orElse(() => {
+    Console.log("Unsupported file extension")
+    None
+  })
+  ->Option.map(languageName => {
     let language = getLanguage(languageName)
     let scmQuery = getScmQuery(languageName)
-    switch (language, scmQuery) {
-    | (Some(language), Some(scmQuery)) => Some((language, scmQuery))
-    | _ => None
-    }
+    (language, scmQuery)
   })
   ->Option.map(((language, scmQuery)) => {
     let parser = createParser()
