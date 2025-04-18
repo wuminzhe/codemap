@@ -32,7 +32,7 @@ let getScmQuery: string => string = languageName => {
   | _ => raise(Failure(`Unsupported scm query for language ${languageName}`))
   }
 
-  readFileSync(scmFilename, "utf-8")
+  readFileSync(join3("src", "queries", scmFilename), "utf-8")
 }
 
 let orElse: (option<'a>, unit => option<'b>) => option<'b> = (o, f) => {
@@ -99,10 +99,25 @@ let getOutline: string => option<string> = filename => {
     let query = buildQuery(language, scm)
     (parser, query)
   })
-  ->Option.map(((parser, query)) => {
-    let source = readFileSync(filename, "utf-8")
-    let tree = parser->parse(source)
-    (source, tree, query)
+  ->Option.flatMap(((parser, query)) => {
+    try {
+      let source = readFileSync(filename, "utf-8")->String.trim
+      switch source {
+      | "" => {
+          Console.log(`Empty file: ${filename}`)
+          None
+        }
+      | _ => {
+          let tree = parser->parse(source)
+          Some((source, tree, query))
+        }
+      }
+    } catch {
+    | _ => {
+        Console.log(`Failed to read file: ${filename}`)
+        None
+      }
+    }
   })
   ->Option.map(((source, tree, query)) => {
     let captures =
@@ -140,7 +155,10 @@ let getOutline: string => option<string> = filename => {
   })
 }
 
-let outline = getOutline("test.py")
+let outline = getOutline("/home/akiwu/Projects/wuminzhe/subnames-tools/nameToAddr.js")
 Console.log(outline)
+
+// let outline = getOutline("test.py")
+// Console.log(outline)
 
 // monad bera sui chains

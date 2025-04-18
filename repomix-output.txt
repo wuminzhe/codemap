@@ -1,0 +1,620 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+The content has been processed where content has been compressed (code blocks are separated by ⋮---- delimiter).
+
+================================================================
+File Summary
+================================================================
+
+Purpose:
+--------
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+
+File Format:
+------------
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Multiple file entries, each consisting of:
+  a. A separator line (================)
+  b. The file path (File: path/to/file)
+  c. Another separator line
+  d. The full contents of the file
+  e. A blank line
+
+Usage Guidelines:
+-----------------
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+
+Notes:
+------
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Content has been compressed - code blocks are separated by ⋮---- delimiter
+
+Additional Info:
+----------------
+
+================================================================
+Directory Structure
+================================================================
+src/
+  queries/
+    javascript.scm
+    python.scm
+  Demo.res
+  Demo.res.js
+  Index.res
+  Index.res.js
+  NodeBindings.res
+  NodeBindings.res.js
+  TreeSitter.res
+  TreeSitter.res.js
+  TreeSitterLanguages.res
+  TreeSitterLanguages.res.js
+.gitignore
+package.json
+README.md
+rescript.json
+test.py
+
+================================================================
+Files
+================================================================
+
+================
+File: src/queries/javascript.scm
+================
+(comment) @comment
+
+(
+  (comment)* @doc
+  .
+  (method_definition
+    name: (property_identifier) @name.definition.method) @definition.method
+  (#not-eq? @name.definition.method "constructor")
+  (#strip! @doc "^[\\s\\*/]+|^[\\s\\*/]$")
+  (#select-adjacent! @doc @definition.method)
+)
+
+(
+  (comment)* @doc
+  .
+  [
+    (class
+      name: (_) @name.definition.class)
+    (class_declaration
+      name: (_) @name.definition.class)
+  ] @definition.class
+  (#strip! @doc "^[\\s\\*/]+|^[\\s\\*/]$")
+  (#select-adjacent! @doc @definition.class)
+)
+
+(
+  (comment)* @doc
+  .
+  [
+    (function_declaration
+      name: (identifier) @name.definition.function)
+    (generator_function
+      name: (identifier) @name.definition.function)
+    (generator_function_declaration
+      name: (identifier) @name.definition.function)
+  ] @definition.function
+  (#strip! @doc "^[\\s\\*/]+|^[\\s\\*/]$")
+  (#select-adjacent! @doc @definition.function)
+)
+
+(
+  (comment)* @doc
+  .
+  (lexical_declaration
+    (variable_declarator
+      name: (identifier) @name.definition.function
+      value: [(arrow_function) (function_declaration)]) @definition.function)
+  (#strip! @doc "^[\\s\\*/]+|^[\\s\\*/]$")
+  (#select-adjacent! @doc @definition.function)
+)
+
+(
+  (comment)* @doc
+  .
+  (variable_declaration
+    (variable_declarator
+      name: (identifier) @name.definition.function
+      value: [(arrow_function) (function_declaration)]) @definition.function)
+  (#strip! @doc "^[\\s\\*/]+|^[\\s\\*/]$")
+  (#select-adjacent! @doc @definition.function)
+)
+
+(assignment_expression
+  left: [
+    (identifier) @name.definition.function
+    (member_expression
+      property: (property_identifier) @name.definition.function)
+  ]
+  right: [(arrow_function) (function_declaration)]
+) @definition.function
+
+(pair
+  key: (property_identifier) @name.definition.function
+  value: [(arrow_function) (function_declaration)]) @definition.function
+
+(
+  (call_expression
+    function: (identifier) @name.reference.call) @reference.call
+  (#not-match? @name.reference.call "^(require)$")
+)
+
+(call_expression
+  function: (member_expression
+    property: (property_identifier) @name.reference.call)
+  arguments: (_) @reference.call)
+
+(new_expression
+  constructor: (_) @name.reference.class) @reference.class
+
+================
+File: src/queries/python.scm
+================
+(class_definition
+  name: (identifier) @name.definition.class) @definition.class
+
+(function_definition
+  name: (identifier) @name.definition.function) @definition.function
+
+(call
+  function: [
+      (identifier) @name.reference.call
+      (attribute
+        attribute: (identifier) @name.reference.call)
+  ]) @reference.call
+
+================
+File: src/Demo.res
+================
+Console.log("Hello, world!")
+
+================
+File: src/Demo.res.js
+================
+// Generated by ReScript, PLEASE EDIT WITH CARE
+⋮----
+console.log("Hello, world!");
+⋮----
+/*  Not a pure module */
+
+================
+File: src/Index.res
+================
+open NodeBindings
+open TreeSitterLanguages
+open TreeSitter
+
+let getLanguageName: string => option<string> = filename => {
+  filename
+  ->String.split(".")
+  ->Array.pop
+  ->Option.flatMap(ext => {
+    switch ext {
+    | "js" => Some("javascript")
+    | "ts" => Some("typescript")
+    | "rs" => Some("rust")
+    | "py" => Some("python")
+    | _ => None
+    }
+  })
+}
+
+let getLanguage: string => 'language = languageName => {
+  switch languageName {
+  | "javascript" => javascript
+  | "python" => python
+  | _ => raise(Failure("Unsupported language"))
+  }
+}
+
+let getScmQuery: string => string = languageName => {
+  let scmFilename = switch languageName {
+  | "javascript" => "javascript.scm"
+  | "python" => "python.scm"
+  | _ => raise(Failure(`Unsupported scm query for language ${languageName}`))
+  }
+
+  readFileSync(join3("src", "queries", scmFilename), "utf-8")
+}
+
+let orElse: (option<'a>, unit => option<'b>) => option<'b> = (o, f) => {
+  switch o {
+  | Some(x) => Some(x)
+  | None => f()
+  }
+}
+
+let buildParser: 'language => 'parser = language => {
+  let parser = createParser()
+  parser->setLanguage(language)
+  parser
+}
+
+let buildQuery: ('language, string) => 'query = (language, scm) => {
+  createQuery(language, scm)
+}
+
+type chunk = {
+  content: string,
+  startRow: int,
+  endRow: int,
+}
+
+let mergeChunks: array<chunk> => array<chunk> = chunks => {
+  let result = [chunks->Array.getUnsafe(0)]
+
+  for i in 1 to Array.length(chunks) - 1 {
+    let prevIndex = Array.length(result) - 1
+    let curr = chunks->Array.getUnsafe(i)
+    let prev = result->Array.getUnsafe(prevIndex)
+
+    if prev.endRow + 1 == curr.startRow {
+      result->Array.setUnsafe(
+        prevIndex,
+        {
+          content: prev.content ++ "\n" ++ curr.content,
+          startRow: prev.startRow,
+          endRow: curr.endRow,
+        },
+      )
+    } else {
+      Array.push(result, curr)
+    }
+  }
+
+  result
+}
+
+let getOutline: string => option<string> = filename => {
+  getLanguageName(filename)
+  ->orElse(() => {
+    Console.log("Unsupported file extension")
+    None
+  })
+  ->Option.map(languageName => {
+    let language = getLanguage(languageName)
+    let scm = getScmQuery(languageName)
+    (language, scm)
+  })
+  ->Option.map(((language, scm)) => {
+    let parser = buildParser(language)
+    let query = buildQuery(language, scm)
+    (parser, query)
+  })
+  ->Option.flatMap(((parser, query)) => {
+    try {
+      let source = readFileSync(filename, "utf-8")->String.trim
+      switch source {
+      | "" => {
+          Console.log(`Empty file: ${filename}`)
+          None
+        }
+      | _ => {
+          let tree = parser->parse(source)
+          Some((source, tree, query))
+        }
+      }
+    } catch {
+    | _ => {
+        Console.log(`Failed to read file: ${filename}`)
+        None
+      }
+    }
+  })
+  ->Option.map(((source, tree, query)) => {
+    let captures =
+      captures(query, tree.rootNode)
+      ->Array.toSorted((a, b) => {
+        float(a.node.startPosition.row - b.node.startPosition.row)
+      })
+      ->Array.filter(capture => {
+        let {name} = capture
+        String.startsWith(name, "name.definition.") || String.startsWith(name, "name.reference.")
+      })
+    (source, captures)
+  })
+  ->Option.map(((source, captures)) => {
+    let lines = String.split(source, "\n")
+    captures->Array.map(capture => {
+      let content =
+        lines
+        ->Array.slice(~start=capture.node.startPosition.row, ~end=capture.node.endPosition.row + 1)
+        ->Array.join("\n")
+      {
+        content,
+        startRow: capture.node.startPosition.row,
+        endRow: capture.node.endPosition.row,
+      }
+    })
+  })
+  ->Option.map(chunks => {
+    let merged = mergeChunks(chunks)
+    merged
+    ->Array.map(chunk => {
+      chunk.content
+    })
+    ->Array.join("\n…\n")
+  })
+}
+
+let outline = getOutline("/home/akiwu/Projects/wuminzhe/subnames-tools/nameToAddr.js")
+Console.log(outline)
+
+// let outline = getOutline("test.py")
+// Console.log(outline)
+
+// monad bera sui chains
+
+================
+File: src/Index.res.js
+================
+// Generated by ReScript, PLEASE EDIT WITH CARE
+⋮----
+function getLanguageName(filename) {
+return Core__Option.flatMap(filename.split(".").pop(), (function (ext) {
+⋮----
+function getLanguage(languageName) {
+⋮----
+Error: new Error()
+⋮----
+function getScmQuery(languageName) {
+⋮----
+return Fs.readFileSync(Path.join("src", "queries", scmFilename), "utf-8");
+⋮----
+function orElse(o, f) {
+⋮----
+return Caml_option.some(Caml_option.valFromOption(o));
+⋮----
+return f();
+⋮----
+function buildParser(language) {
+var parser = new TreeSitter();
+parser.setLanguage(language);
+⋮----
+function buildQuery(language, scm) {
+return new TreeSitter.Query(language, scm);
+⋮----
+function mergeChunks(chunks) {
+⋮----
+result.push(curr);
+⋮----
+function getOutline(filename) {
+return Core__Option.map(Core__Option.map(Core__Option.map(Core__Option.flatMap(Core__Option.map(Core__Option.map(orElse(getLanguageName(filename), (function () {
+console.log("Unsupported file extension");
+⋮----
+var language = getLanguage(languageName);
+var scm = getScmQuery(languageName);
+⋮----
+var parser = buildParser(language);
+var query = new TreeSitter.Query(language, param[1]);
+⋮----
+var source = Fs.readFileSync(filename, "utf-8").trim();
+⋮----
+console.log("Empty file: " + filename);
+⋮----
+var tree = param[0].parse(source);
+⋮----
+console.log("Failed to read file: " + filename);
+⋮----
+var captures = param[2].captures(param[1].rootNode).toSorted(function (a, b) {
+⋮----
+}).filter(function (capture) {
+⋮----
+if (name.startsWith("name.definition.")) {
+⋮----
+return name.startsWith("name.reference.");
+⋮----
+var lines = param[0].split("\n");
+return param[1].map(function (capture) {
+var content = lines.slice(capture.node.startPosition.row, capture.node.endPosition.row + 1 | 0).join("\n");
+⋮----
+var merged = mergeChunks(chunks);
+return merged.map(function (chunk) {
+⋮----
+}).join("\n…\n");
+⋮----
+var outline = getOutline("/home/akiwu/Projects/wuminzhe/subnames-tools/nameToAddr.js");
+⋮----
+console.log(outline);
+⋮----
+/* outline Not a pure module */
+
+================
+File: src/NodeBindings.res
+================
+@module("fs")
+external readFileSync: (string, string) => string = "readFileSync"
+
+@scope("process")
+external cwd: unit => string = "cwd"
+
+@module("path")
+external join3: (string, string, string) => string = "join"
+
+@module("path")
+external dirname: string => string = "dirname"
+
+================
+File: src/NodeBindings.res.js
+================
+// Generated by ReScript, PLEASE EDIT WITH CARE
+/* This output is empty. Its source's type definitions, externals and/or unused code got optimized away. */
+
+================
+File: src/TreeSitter.res
+================
+@new
+@module
+external createParser: unit => 'parser = "tree-sitter"
+
+@send
+external setLanguage: ('parser, 'language) => unit = "setLanguage"
+
+@new
+@module("tree-sitter")
+external createQuery: ('language, string) => 'query = "Query"
+
+type position = {
+  row: int,
+  column: int,
+}
+type nodetype
+type rec node = {
+  @as("type") type_: nodetype,
+  startPosition: position,
+  endPosition: position,
+  childCount: int,
+  children: array<node>,
+  text: string,
+}
+type tree = {
+  rootNode: node,
+}
+@send external parse: ('parser, string) => tree = "parse"
+
+type capture = {
+  name: string,
+  node: node,
+}
+@send external captures: ('query, node) => array<capture> = "captures"
+
+================
+File: src/TreeSitter.res.js
+================
+// Generated by ReScript, PLEASE EDIT WITH CARE
+/* This output is empty. Its source's type definitions, externals and/or unused code got optimized away. */
+
+================
+File: src/TreeSitterLanguages.res
+================
+@module
+external python: 'language = "tree-sitter-python"
+
+@module
+external javascript: 'language = "tree-sitter-javascript"
+
+================
+File: src/TreeSitterLanguages.res.js
+================
+// Generated by ReScript, PLEASE EDIT WITH CARE
+/* This output is empty. Its source's type definitions, externals and/or unused code got optimized away. */
+
+================
+File: .gitignore
+================
+.DS_Store
+/node_modules/
+/lib/
+.bsb.lock
+.merlin
+
+================
+File: package.json
+================
+{
+  "name": "codemap",
+  "version": "0.0.1",
+  "scripts": {
+    "res:build": "rescript",
+    "res:clean": "rescript clean",
+    "res:dev": "rescript -w"
+  },
+  "keywords": [
+    "rescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@rescript/core": "^1.6.1",
+    "rescript": "^11.1.4",
+    "tree-sitter-wasms": "^0.1.12",
+    "web-tree-sitter": "^0.24.7"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "rescript",
+      "tree-sitter",
+      "tree-sitter-javascript",
+      "tree-sitter-python"
+    ]
+  }
+}
+
+================
+File: README.md
+================
+# codemap
+
+- [Installation](../../README.md)
+
+
+## Installation
+
+```sh
+npm install
+```
+
+## Build
+
+- Build: `npm run res:build`
+- Clean: `npm run res:clean`
+- Build & watch: `npm run res:dev`
+
+## Run
+
+```sh
+node src/Demo.res.js
+```
+
+================
+File: rescript.json
+================
+{
+  "name": "codemap",
+  "sources": {
+    "dir": "src",
+    "subdirs": true
+  },
+  "package-specs": {
+    "module": "commonjs",
+    "in-source": true
+  },
+  "suffix": ".res.js",
+  "bs-dependencies": [
+    "@rescript/core"
+  ],
+  "bsc-flags": [
+    "-open RescriptCore"
+  ]
+}
+
+================
+File: test.py
+================
+class MyClass
+⋮----
+def method1(self)
+⋮----
+def my_function()
+
+
+
+================================================================
+End of Codebase
+================================================================
