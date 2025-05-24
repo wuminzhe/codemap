@@ -2,11 +2,16 @@
 
 import * as Fs from "fs";
 import * as Path from "path";
+import * as Js_exn from "rescript/lib/es6/js_exn.js";
 import * as Caml_option from "rescript/lib/es6/caml_option.js";
-import * as TreeSitter from "tree-sitter";
+import * as Nodemodule from "node:module";
 import * as Core__Option from "@rescript/core/src/Core__Option.res.js";
-import * as TreeSitterPython from "tree-sitter-python";
-import * as TreeSitterJavascript from "tree-sitter-javascript";
+import WebTreeSitter from "web-tree-sitter";
+import * as Caml_js_exceptions from "rescript/lib/es6/caml_js_exceptions.js";
+
+var $$require = Nodemodule.createRequire(import.meta.url);
+
+await WebTreeSitter.init();
 
 function getLanguageName(filename) {
   return Core__Option.flatMap(filename.split(".").pop(), (function (ext) {
@@ -25,18 +30,33 @@ function getLanguageName(filename) {
               }));
 }
 
-function getLanguage(languageName) {
-  switch (languageName) {
-    case "javascript" :
-        return TreeSitterJavascript;
-    case "python" :
-        return TreeSitterPython;
-    default:
-      throw {
-            RE_EXN_ID: "Failure",
-            _1: "Unsupported language",
-            Error: new Error()
+async function getLanguage(languageName) {
+  var path = $$require.resolve("tree-sitter-wasms/out/tree-sitter-" + languageName + ".wasm");
+  try {
+    await access(path);
+    var language = await WebTreeSitter.Language.load(path);
+    return {
+            TAG: "Ok",
+            _0: language
           };
+  }
+  catch (raw_obj){
+    var obj = Caml_js_exceptions.internalToOCamlException(raw_obj);
+    if (obj.RE_EXN_ID === Js_exn.$$Error) {
+      var msg = obj._1.message;
+      if (msg !== undefined) {
+        return {
+                TAG: "Error",
+                _0: "Language not found: " + languageName + ", " + msg
+              };
+      } else {
+        return {
+                TAG: "Error",
+                _0: "Failed to load language: " + languageName
+              };
+      }
+    }
+    throw obj;
   }
 }
 
@@ -68,116 +88,17 @@ function orElse(o, f) {
 }
 
 function buildParser(language) {
-  var parser = new TreeSitter();
+  var parser = new WebTreeSitter();
   parser.setLanguage(language);
   return parser;
 }
 
-function buildQuery(language, scm) {
-  return new TreeSitter.Query(language, scm);
-}
-
-function mergeChunks(chunks) {
-  var result = [chunks[0]];
-  for(var i = 1 ,i_finish = chunks.length; i < i_finish; ++i){
-    var prevIndex = result.length - 1 | 0;
-    var curr = chunks[i];
-    var prev = result[prevIndex];
-    if ((prev.endRow + 1 | 0) === curr.startRow) {
-      result[prevIndex] = {
-        content: prev.content + "\n" + curr.content,
-        startRow: prev.startRow,
-        endRow: curr.endRow
-      };
-    } else {
-      result.push(curr);
-    }
-  }
-  return result;
-}
-
-function getOutline(filename) {
-  return Core__Option.map(Core__Option.map(Core__Option.map(Core__Option.flatMap(Core__Option.map(Core__Option.map(orElse(getLanguageName(filename), (function () {
-                                        console.log("Unsupported file extension");
-                                      })), (function (languageName) {
-                                    var language = getLanguage(languageName);
-                                    var scm = getScmQuery(languageName);
-                                    return [
-                                            language,
-                                            scm
-                                          ];
-                                  })), (function (param) {
-                                var language = param[0];
-                                var parser = buildParser(language);
-                                var query = new TreeSitter.Query(language, param[1]);
-                                return [
-                                        parser,
-                                        query
-                                      ];
-                              })), (function (param) {
-                            try {
-                              var source = Fs.readFileSync(filename, "utf-8").trim();
-                              if (source === "") {
-                                console.log("Empty file: " + filename);
-                                return ;
-                              }
-                              var tree = param[0].parse(source);
-                              return [
-                                      source,
-                                      tree,
-                                      param[1]
-                                    ];
-                            }
-                            catch (exn){
-                              console.log("Failed to read file: " + filename);
-                              return ;
-                            }
-                          })), (function (param) {
-                        var captures = param[2].captures(param[1].rootNode).toSorted(function (a, b) {
-                                return a.node.startPosition.row - b.node.startPosition.row | 0;
-                              }).filter(function (capture) {
-                              var name = capture.name;
-                              if (name.startsWith("name.definition.")) {
-                                return true;
-                              } else {
-                                return name.startsWith("name.reference.");
-                              }
-                            });
-                        return [
-                                param[0],
-                                captures
-                              ];
-                      })), (function (param) {
-                    var lines = param[0].split("\n");
-                    return param[1].map(function (capture) {
-                                var content = lines.slice(capture.node.startPosition.row, capture.node.endPosition.row + 1 | 0).join("\n");
-                                return {
-                                        content: content,
-                                        startRow: capture.node.startPosition.row,
-                                        endRow: capture.node.endPosition.row
-                                      };
-                              });
-                  })), (function (chunks) {
-                var merged = mergeChunks(chunks);
-                return merged.map(function (chunk) {
-                              return chunk.content;
-                            }).join("\n…\n");
-              }));
-}
-
-var outline = getOutline("/home/akiwu/Projects/wuminzhe/subnames-tools/nameToAddr.js");
-
-console.log(outline);
-
 export {
+  $$require ,
   getLanguageName ,
   getLanguage ,
   getScmQuery ,
   orElse ,
   buildParser ,
-  buildQuery ,
-  mergeChunks ,
-  getOutline ,
-  outline ,
 }
-/* outline Not a pure module */
+/* require Not a pure module */
