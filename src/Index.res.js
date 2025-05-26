@@ -223,56 +223,24 @@ function getOutlineAsync(filename) {
               }));
 }
 
-function getOutline(filename) {
-  var languageName = getLanguageName(filename);
-  if (languageName === undefined) {
-    return {
-            TAG: "Error",
-            _0: "Unsupported file extension: " + filename
-          };
-  }
-  try {
-    getScmQuery(languageName);
-    var source = Fs.readFileSync(filename, "utf-8").trim();
-    if (source === "") {
-      return {
-              TAG: "Error",
-              _0: "Empty file: " + filename
-            };
-    } else {
-      return {
-              TAG: "Ok",
-              _0: "Outline for " + filename + " with language " + languageName
-            };
-    }
-  }
-  catch (raw_obj){
-    var obj = Caml_js_exceptions.internalToOCamlException(raw_obj);
-    if (obj.RE_EXN_ID === Js_exn.$$Error) {
-      var msg = obj._1.message;
-      if (msg !== undefined) {
-        return {
-                TAG: "Error",
-                _0: "Failed to get outline: " + msg
-              };
-      } else {
-        return {
-                TAG: "Error",
-                _0: "Failed to get outline for " + filename
-              };
-      }
-    }
-    throw obj;
-  }
+function testOutlineAsync(filename) {
+  console.log("Testing outline generation for " + filename + "...");
+  return Core__Promise.$$catch(getOutlineAsync(filename).then(function (result) {
+                  if (result.TAG === "Ok") {
+                    console.log("✅ Successfully generated outline:");
+                    console.log(result._0);
+                  } else {
+                    console.log("❌ Failed to generate outline:");
+                    console.log(result._0);
+                  }
+                  return Promise.resolve();
+                }), (function (param) {
+                console.log("❌ Error during outline generation");
+                return Promise.resolve();
+              }));
 }
 
-Core__Promise.$$catch(getOutlineAsync("./test.py").then(function (outline) {
-          console.log(outline);
-          return Promise.resolve();
-        }), (function (exn) {
-        console.log("Error getting outline");
-        return Promise.resolve();
-      }));
+testOutlineAsync("./test.py");
 
 export {
   $$require ,
@@ -283,6 +251,6 @@ export {
   buildParser ,
   mergeChunks ,
   getOutlineAsync ,
-  getOutline ,
+  testOutlineAsync ,
 }
 /* require Not a pure module */
