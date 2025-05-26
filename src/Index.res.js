@@ -6,6 +6,7 @@ import * as Js_exn from "rescript/lib/es6/js_exn.js";
 import * as Caml_option from "rescript/lib/es6/caml_option.js";
 import * as Nodemodule from "node:module";
 import * as Core__Option from "@rescript/core/src/Core__Option.res.js";
+import * as Core__Promise from "@rescript/core/src/Core__Promise.res.js";
 import WebTreeSitter from "web-tree-sitter";
 import * as Caml_js_exceptions from "rescript/lib/es6/caml_js_exceptions.js";
 
@@ -33,7 +34,6 @@ function getLanguageName(filename) {
 async function getLanguage(languageName) {
   var path = $$require.resolve("tree-sitter-wasms/out/tree-sitter-" + languageName + ".wasm");
   try {
-    await access(path);
     var language = await WebTreeSitter.Language.load(path);
     return {
             TAG: "Ok",
@@ -93,6 +93,187 @@ function buildParser(language) {
   return parser;
 }
 
+function mergeChunks(chunks) {
+  var result = [chunks[0]];
+  for(var i = 1 ,i_finish = chunks.length; i < i_finish; ++i){
+    var prevIndex = result.length - 1 | 0;
+    var curr = chunks[i];
+    var prev = result[prevIndex];
+    if ((prev.endRow + 1 | 0) === curr.startRow) {
+      result[prevIndex] = {
+        content: prev.content + "\n" + curr.content,
+        startRow: prev.startRow,
+        endRow: curr.endRow
+      };
+    } else {
+      result.push(curr);
+    }
+  }
+  return result;
+}
+
+function getOutlineAsync(filename) {
+  var languageName = getLanguageName(filename);
+  if (languageName === undefined) {
+    return Promise.resolve({
+                TAG: "Error",
+                _0: "Unsupported file extension: " + filename
+              });
+  }
+  var scmResult;
+  try {
+    scmResult = {
+      TAG: "Ok",
+      _0: getScmQuery(languageName)
+    };
+  }
+  catch (raw_obj){
+    var obj = Caml_js_exceptions.internalToOCamlException(raw_obj);
+    if (obj.RE_EXN_ID === Js_exn.$$Error) {
+      var msg = obj._1.message;
+      scmResult = msg !== undefined ? ({
+            TAG: "Error",
+            _0: "Failed to get SCM query: " + msg
+          }) : ({
+            TAG: "Error",
+            _0: "Failed to get SCM query for " + languageName
+          });
+    } else {
+      throw obj;
+    }
+  }
+  if (scmResult.TAG !== "Ok") {
+    return Promise.resolve({
+                TAG: "Error",
+                _0: scmResult._0
+              });
+  }
+  var scm = scmResult._0;
+  return Core__Promise.$$catch(getLanguage(languageName).then(function (languageResult) {
+                  if (languageResult.TAG !== "Ok") {
+                    return Promise.resolve({
+                                TAG: "Error",
+                                _0: languageResult._0
+                              });
+                  }
+                  var language = languageResult._0;
+                  try {
+                    var source = Fs.readFileSync(filename, "utf-8").trim();
+                    if (source === "") {
+                      return Promise.resolve({
+                                  TAG: "Error",
+                                  _0: "Empty file: " + filename
+                                });
+                    }
+                    var parser = buildParser(language);
+                    var tree = parser.parse(source);
+                    var rootNode = tree.rootNode;
+                    var query = language.query(scm);
+                    var captures = query.captures(rootNode).toSorted(function (a, b) {
+                            return a.node.startPosition.row - b.node.startPosition.row | 0;
+                          }).filter(function (capture) {
+                          var name = capture.name;
+                          if (name.startsWith("name.definition.")) {
+                            return true;
+                          } else {
+                            return name.startsWith("name.reference.");
+                          }
+                        });
+                    var lines = source.split("\n");
+                    var chunks = captures.map(function (capture) {
+                          var content = lines.slice(capture.node.startPosition.row, capture.node.endPosition.row + 1 | 0).join("\n");
+                          return {
+                                  content: content,
+                                  startRow: capture.node.startPosition.row,
+                                  endRow: capture.node.endPosition.row
+                                };
+                        });
+                    if (chunks.length <= 0) {
+                      return Promise.resolve({
+                                  TAG: "Error",
+                                  _0: "No outline elements found in file: " + filename
+                                });
+                    }
+                    var merged = mergeChunks(chunks);
+                    var result = merged.map(function (chunk) {
+                            return chunk.content;
+                          }).join("\n…\n");
+                    return Promise.resolve({
+                                TAG: "Ok",
+                                _0: result
+                              });
+                  }
+                  catch (raw_obj){
+                    var obj = Caml_js_exceptions.internalToOCamlException(raw_obj);
+                    if (obj.RE_EXN_ID === Js_exn.$$Error) {
+                      var msg = obj._1.message;
+                      var errorMsg = msg !== undefined ? "Failed to process file: " + msg : "Failed to process file: " + filename;
+                      return Promise.resolve({
+                                  TAG: "Error",
+                                  _0: errorMsg
+                                });
+                    }
+                    throw obj;
+                  }
+                }), (function (err) {
+                return Promise.resolve({
+                            TAG: "Error",
+                            _0: "Error processing outline for " + filename
+                          });
+              }));
+}
+
+function getOutline(filename) {
+  var languageName = getLanguageName(filename);
+  if (languageName === undefined) {
+    return {
+            TAG: "Error",
+            _0: "Unsupported file extension: " + filename
+          };
+  }
+  try {
+    getScmQuery(languageName);
+    var source = Fs.readFileSync(filename, "utf-8").trim();
+    if (source === "") {
+      return {
+              TAG: "Error",
+              _0: "Empty file: " + filename
+            };
+    } else {
+      return {
+              TAG: "Ok",
+              _0: "Outline for " + filename + " with language " + languageName
+            };
+    }
+  }
+  catch (raw_obj){
+    var obj = Caml_js_exceptions.internalToOCamlException(raw_obj);
+    if (obj.RE_EXN_ID === Js_exn.$$Error) {
+      var msg = obj._1.message;
+      if (msg !== undefined) {
+        return {
+                TAG: "Error",
+                _0: "Failed to get outline: " + msg
+              };
+      } else {
+        return {
+                TAG: "Error",
+                _0: "Failed to get outline for " + filename
+              };
+      }
+    }
+    throw obj;
+  }
+}
+
+Core__Promise.$$catch(getOutlineAsync("./test.py").then(function (outline) {
+          console.log(outline);
+          return Promise.resolve();
+        }), (function (exn) {
+        console.log("Error getting outline");
+        return Promise.resolve();
+      }));
+
 export {
   $$require ,
   getLanguageName ,
@@ -100,5 +281,8 @@ export {
   getScmQuery ,
   orElse ,
   buildParser ,
+  mergeChunks ,
+  getOutlineAsync ,
+  getOutline ,
 }
 /* require Not a pure module */
